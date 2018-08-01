@@ -72,6 +72,9 @@ struct _PortalTestWin
 
   GtkWidget *screencast_label;
   GtkWidget *screencast_toggle;
+
+  GFileMonitor *update_monitor;
+  GtkWidget *update_dialog;
 };
 
 struct _PortalTestWinClass
@@ -107,6 +110,26 @@ update_network_status (PortalTestWin *win)
 }
 
 static void
+update_monitor_changed (GFileMonitor      *monitor,
+                        GFile             *file,
+                        GFile             *other,
+                        GFileMonitorEvent  event,
+                        PortalTestWin     *win)
+{
+  if (event == G_FILE_MONITOR_EVENT_CREATED)
+    gtk_window_present (GTK_WINDOW (win->update_dialog));
+}
+
+static void
+update_dialog_response (GtkDialog     *dialog,
+                        int            response,
+                        PortalTestWin *win)
+{
+  if (response == GTK_RESPONSE_OK)
+    portal_test_app_restart (PORTAL_TEST_APP (gtk_window_get_application (GTK_WINDOW (win))));
+}
+
+static void
 portal_test_win_init (PortalTestWin *win)
 {
   const char *status;
@@ -114,6 +137,7 @@ portal_test_win_init (PortalTestWin *win)
   g_autofree char *proxy = NULL;
   g_autofree char *path = NULL;
   g_autoptr(GError) error = NULL;
+  g_autoptr(GFile) file = NULL;
 
   gtk_widget_init_template (GTK_WIDGET (win));
 
@@ -162,6 +186,12 @@ portal_test_win_init (PortalTestWin *win)
                                                             "org.freedesktop.portal.Desktop",
                                                             "/org/freedesktop/portal/desktop",
                                                             NULL, NULL);
+
+  file = g_file_new_for_path ("/app/.updated");
+  win->update_monitor = g_file_monitor_file (file, 0, NULL, NULL);
+  g_signal_connect (win->update_monitor, "changed", G_CALLBACK (update_monitor_changed), win);
+
+  g_signal_connect (win->update_dialog, "response", G_CALLBACK (update_dialog_response), win);
 }
 
 static void
@@ -1301,6 +1331,7 @@ portal_test_win_class_init (PortalTestWinClass *class)
   gtk_widget_class_bind_template_child (widget_class, PortalTestWin, save_how);
   gtk_widget_class_bind_template_child (widget_class, PortalTestWin, screencast_label);
   gtk_widget_class_bind_template_child (widget_class, PortalTestWin, screencast_toggle);
+  gtk_widget_class_bind_template_child (widget_class, PortalTestWin, update_dialog);
 }
 
 GtkApplicationWindow *
